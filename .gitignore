@@ -25,6 +25,8 @@ go.work
 go.work.sum
 
 # env file
+tmp/
+bin/
 .env
 
 # Editor/IDE
