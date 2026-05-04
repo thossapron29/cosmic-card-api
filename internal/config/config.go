@@ -8,20 +8,22 @@ import (
 )
 
 type Config struct {
-	AppName    string
-	AppVersion string
-	AppEnv     string
-	Port       string
+	AppName     string
+	AppVersion  string
+	AppEnv      string
+	Port        string
+	DatabaseURL string
 }
 
 func Load() Config {
 	_ = godotenv.Load()
 
 	cfg := Config{
-		AppName:    mustGetEnv("APP_NAME"),
-		AppVersion: mustGetEnv("APP_VERSION"),
-		AppEnv:     mustGetEnv("APP_ENV"),
-		Port:       mustGetEnv("PORT"),
+		AppName:     mustGetEnv("APP_NAME"),
+		AppVersion:  mustGetEnv("APP_VERSION"),
+		AppEnv:      mustGetEnv("APP_ENV"),
+		Port:        mustGetEnv("PORT"),
+		DatabaseURL: mustGetEnv("DATABASE_URL"),
 	}
 
 	return cfg

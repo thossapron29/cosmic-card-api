@@ -4,13 +4,17 @@ import (
 	"log"
 
 	"github.com/yourname/cosmic-card-api/internal/config"
+	"github.com/yourname/cosmic-card-api/internal/database"
 	"github.com/yourname/cosmic-card-api/internal/router"
 )
 
 func main() {
 	cfg := config.Load()
 
-	r := router.New(cfg)
+	db := database.NewPostgresPool(cfg.DatabaseURL)
+	defer db.Close()
+
+	r := router.New(cfg, db)
 
 	addr := ":" + cfg.Port
 
