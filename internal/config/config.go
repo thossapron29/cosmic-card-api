@@ -15,23 +15,22 @@ type Config struct {
 }
 
 func Load() Config {
-	err := godotenv.Load()
+	_ = godotenv.Load()
 
-	if err != nil {
-		log.Println("Error loading .env file")
+	cfg := Config{
+		AppName:    mustGetEnv("APP_NAME"),
+		AppVersion: mustGetEnv("APP_VERSION"),
+		AppEnv:     mustGetEnv("APP_ENV"),
+		Port:       mustGetEnv("PORT"),
 	}
 
-	return Config{
-		AppName:    getEnv("APP_NAME", "cosmic-card-api"),
-		AppVersion: getEnv("APP_VERSION", "0.1.0"),
-		AppEnv:     getEnv("APP_ENV", "local"),
-		Port:       getEnv("PORT", "8080"),
-	}
+	return cfg
 }
 
-func getEnv(key string, fallback string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
+func mustGetEnv(key string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		log.Fatalf("Missing required environment variable: %s", key)
 	}
-	return fallback
+	return value
 }
