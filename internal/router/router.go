@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/yourname/cosmic-card-api/internal/config"
+	"github.com/yourname/cosmic-card-api/internal/modules/decks"
 )
 
 func New(cfg config.Config, db *pgxpool.Pool) *gin.Engine {
@@ -41,6 +42,15 @@ func New(cfg config.Config, db *pgxpool.Pool) *gin.Engine {
 	})
 
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
+
+	deckRepo := decks.NewRepository(db)
+	deckService := decks.NewService(deckRepo)
+	deckHandler := decks.NewHandler(deckService)
+
+	api := r.Group("/api/v1")
+	{
+		api.GET("/decks", deckHandler.GetDecks)
+	}
 
 	return r
 }
