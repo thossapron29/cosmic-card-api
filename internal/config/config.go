@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	"fmt"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -15,24 +15,38 @@ type Config struct {
 	DatabaseURL string
 }
 
-func Load() Config {
+func Load() (Config, error) {
 	_ = godotenv.Load()
 
 	cfg := Config{
-		AppName:     mustGetEnv("APP_NAME"),
-		AppVersion:  mustGetEnv("APP_VERSION"),
-		AppEnv:      mustGetEnv("APP_ENV"),
-		Port:        mustGetEnv("PORT"),
-		DatabaseURL: mustGetEnv("DATABASE_URL"),
+		AppName:     os.Getenv("APP_NAME"),
+		AppVersion:  os.Getenv("APP_VERSION"),
+		AppEnv:      os.Getenv("APP_ENV"),
+		Port:        os.Getenv("PORT"),
+		DatabaseURL: os.Getenv("DATABASE_URL"),
 	}
 
-	return cfg
+	if err := cfg.Validate(); err != nil {
+		return Config{}, err
+	}
+
+	return cfg, nil
 }
 
-func mustGetEnv(key string) string {
-	value := os.Getenv(key)
-	if value == "" {
-		log.Fatalf("Missing required environment variable: %s", key)
+func (c Config) Validate() error {
+	required := map[string]string{
+		"APP_NAME":     c.AppName,
+		"APP_VERSION":  c.AppVersion,
+		"APP_ENV":      c.AppEnv,
+		"PORT":         c.Port,
+		"DATABASE_URL": c.DatabaseURL,
 	}
-	return value
+
+	for key, value := range required {
+		if value == "" {
+			return fmt.Errorf("missing required environment variable: %s", key)
+		}
+	}
+
+	return nil
 }

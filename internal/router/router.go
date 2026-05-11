@@ -9,11 +9,22 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/yourname/cosmic-card-api/internal/config"
-	"github.com/yourname/cosmic-card-api/internal/modules/decks"
-	"github.com/yourname/cosmic-card-api/internal/modules/draws"
 )
 
-func New(cfg config.Config, db *pgxpool.Pool) *gin.Engine {
+type APIHandlers struct {
+	Decks DeckHandler
+	Draws DrawHandler
+}
+
+type DeckHandler interface {
+	GetDecks(c *gin.Context)
+}
+
+type DrawHandler interface {
+	Reveal(c *gin.Context)
+}
+
+func New(cfg config.Config, db *pgxpool.Pool, handlers APIHandlers) *gin.Engine {
 	r := gin.Default()
 
 	r.GET("/health", func(c *gin.Context) {
@@ -44,20 +55,15 @@ func New(cfg config.Config, db *pgxpool.Pool) *gin.Engine {
 
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
-	deckRepo := decks.NewRepository(db)
-	deckService := decks.NewService(deckRepo)
-	deckHandler := decks.NewHandler(deckService)
-
 	api := r.Group("/api/v1")
-	{
-		api.GET("/decks", deckHandler.GetDecks)
+
+	if handlers.Decks != nil {
+		api.GET("/decks", handlers.Decks.GetDecks)
 	}
 
-	drawRepo := draws.NewRepository(db)
-	drawService := draws.NewService(drawRepo)
-	drawHandler := draws.NewHandler(drawService)
-
-	api.POST("/draws/reveal", drawHandler.Reveal)
+	if handlers.Draws != nil {
+		api.POST("/draws/reveal", handlers.Draws.Reveal)
+	}
 
 	return r
 }

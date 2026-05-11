@@ -2,11 +2,15 @@ package decks
 
 import "context"
 
-type Service struct {
-	repo *Repository
+type DeckRepository interface {
+	FindActiveDecks(ctx context.Context, locale string) ([]Deck, error)
 }
 
-func NewService(repo *Repository) *Service {
+type Service struct {
+	repo DeckRepository
+}
+
+func NewService(repo DeckRepository) *Service {
 	return &Service{repo: repo}
 }
 

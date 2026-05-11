@@ -5,11 +5,15 @@ import (
 	"errors"
 )
 
-type Service struct {
-	repo *Repository
+type DrawRepository interface {
+	RevealRandomCard(ctx context.Context, req RevealDrawRequest) (RevealDrawResponse, error)
 }
 
-func NewService(repo *Repository) *Service {
+type Service struct {
+	repo DrawRepository
+}
+
+func NewService(repo DrawRepository) *Service {
 	return &Service{repo: repo}
 }
 
