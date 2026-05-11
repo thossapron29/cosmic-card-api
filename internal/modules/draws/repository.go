@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -13,6 +14,30 @@ type Repository struct {
 
 func NewRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{db: db}
+}
+
+func (r *Repository) FindDailyDrawByUserAndDate(ctx context.Context, userID, clientLocalDate string) (int64, error) {
+	query := `
+		SELECT id
+		FROM user_draws
+		WHERE user_id = $1
+		  AND draw_mode = 'daily'
+		  AND client_local_date = $2::date
+		ORDER BY id DESC
+		LIMIT 1
+	`
+
+	var drawID int64
+
+	err := r.db.QueryRow(ctx, query, userID, clientLocalDate).Scan(&drawID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return 0, nil
+		}
+		return 0, err
+	}
+
+	return drawID, nil
 }
 
 func (r *Repository) RevealRandomCard(ctx context.Context, req RevealDrawRequest) (RevealDrawResponse, error) {

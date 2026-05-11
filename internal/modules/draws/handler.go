@@ -20,28 +20,37 @@ func (h *Handler) Reveal(c *gin.Context) {
 	var req RevealDrawRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"message": "invalid request body",
-		})
+		writeAppError(c, NewAppError(http.StatusBadRequest, "INVALID_REQUEST", "invalid request body"))
 		return
 	}
 
 	res, err := h.service.Reveal(c.Request.Context(), req)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			c.JSON(http.StatusNotFound, gin.H{
-				"message": "no available card found",
-			})
+		var appErr *AppError
+		if errors.As(err, &appErr) {
+			writeAppError(c, appErr)
 			return
 		}
 
-		c.JSON(http.StatusBadRequest, gin.H{
-			"message": err.Error(),
-		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeAppError(c, NewAppError(http.StatusNotFound, "NO_CARD_AVAILABLE", "no available card found"))
+			return
+		}
+
+		writeAppError(c, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "failed to reveal card"))
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"data": res,
+	})
+}
+
+func writeAppError(c *gin.Context, err *AppError) {
+	c.JSON(err.Status, gin.H{
+		"error": gin.H{
+			"code":    err.Code,
+			"message": err.Message,
+		},
 	})
 }
