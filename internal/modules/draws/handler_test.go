@@ -100,10 +100,93 @@ func TestHandlerRevealReturnsStructuredNotFoundWhenNoCardIsAvailable(t *testing.
 	}
 }
 
+func TestHandlerGetTodayStatusReturnsStructuredData(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	service := NewService(&fakeDrawRepository{
+		countsByMode: map[string]int{
+			"guidance":   0,
+			"support":    0,
+			"reflection": 1,
+		},
+	})
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.GET("/draws/today-status", handler.GetTodayStatus)
+
+	req := httptest.NewRequest(http.MethodGet, "/draws/today-status?userId=user_123&clientLocalDate=2026-05-11", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var response struct {
+		Data TodayStatusResponse `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("expected valid json response, got %v", err)
+	}
+
+	if response.Data.ClientLocalDate != "2026-05-11" {
+		t.Fatalf("expected clientLocalDate to be preserved, got %#v", response.Data)
+	}
+}
+
+func TestHandlerGetHistoryReturnsPagingEnvelope(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	service := NewService(&fakeDrawRepository{
+		historyItems: []DrawHistoryItem{
+			{DrawID: 3},
+			{DrawID: 2},
+			{DrawID: 1},
+		},
+	})
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.GET("/draws", handler.GetHistory)
+
+	req := httptest.NewRequest(http.MethodGet, "/draws?userId=user_123&limit=2", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var response struct {
+		Data   []DrawHistoryItem `json:"data"`
+		Paging DrawHistoryPaging `json:"paging"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("expected valid json response, got %v", err)
+	}
+
+	if len(response.Data) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(response.Data))
+	}
+
+	if response.Paging.NextCursor != "2" {
+		t.Fatalf("expected next cursor 2, got %q", response.Paging.NextCursor)
+	}
+}
+
 type fakeNoCardRepository struct{}
 
 func (f *fakeNoCardRepository) FindDailyDrawByUserAndDate(ctx context.Context, userID, clientLocalDate string) (int64, error) {
 	return 0, nil
+}
+
+func (f *fakeNoCardRepository) CountDrawsByUserModeAndDate(ctx context.Context, userID, drawMode, clientLocalDate string) (int, error) {
+	return 0, nil
+}
+
+func (f *fakeNoCardRepository) FindDrawHistory(ctx context.Context, userID, locale string, limit int, cursor int64) ([]DrawHistoryItem, error) {
+	return nil, nil
 }
 
 func (f *fakeNoCardRepository) RevealRandomCard(ctx context.Context, req RevealDrawRequest) (RevealDrawResponse, error) {

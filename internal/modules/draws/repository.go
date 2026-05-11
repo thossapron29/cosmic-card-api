@@ -40,6 +40,101 @@ func (r *Repository) FindDailyDrawByUserAndDate(ctx context.Context, userID, cli
 	return drawID, nil
 }
 
+func (r *Repository) CountDrawsByUserModeAndDate(ctx context.Context, userID, drawMode, clientLocalDate string) (int, error) {
+	query := `
+		SELECT COUNT(*)
+		FROM user_draws
+		WHERE user_id = $1
+		  AND draw_mode = $2
+		  AND client_local_date = $3::date
+	`
+
+	var count int
+
+	err := r.db.QueryRow(ctx, query, userID, drawMode, clientLocalDate).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
+func (r *Repository) FindDrawHistory(ctx context.Context, userID, locale string, limit int, cursor int64) ([]DrawHistoryItem, error) {
+	query := `
+		SELECT
+			ud.id AS draw_id,
+			ud.draw_mode,
+			COALESCE(ud.question_text, '') AS question_text,
+			COALESCE(ud.client_local_date::text, '') AS client_local_date,
+			ud.drawn_at,
+			d.id AS deck_id,
+			d.code AS deck_code,
+			COALESCE(dt.name, dt_en.name) AS deck_name,
+			c.id AS card_id,
+			c.code AS card_code,
+			COALESCE(ct.title, ct_en.title) AS card_title,
+			COALESCE(ct.short_message, ct_en.short_message, '') AS short_message
+		FROM user_draws ud
+		JOIN decks d ON d.id = ud.deck_id
+		JOIN cards c ON c.id = ud.card_id
+		LEFT JOIN deck_translations dt
+			ON dt.deck_id = d.id
+		   AND dt.locale = $2
+		LEFT JOIN deck_translations dt_en
+			ON dt_en.deck_id = d.id
+		   AND dt_en.locale = 'en'
+		LEFT JOIN card_translations ct
+			ON ct.card_id = c.id
+		   AND ct.locale = $2
+		LEFT JOIN card_translations ct_en
+			ON ct_en.card_id = c.id
+		   AND ct_en.locale = 'en'
+		WHERE ud.user_id = $1
+		  AND ($4 = 0 OR ud.id < $4)
+		ORDER BY ud.id DESC
+		LIMIT $3
+	`
+
+	rows, err := r.db.Query(ctx, query, userID, locale, limit, cursor)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]DrawHistoryItem, 0)
+
+	for rows.Next() {
+		var item DrawHistoryItem
+		var revealedAt time.Time
+
+		if err := rows.Scan(
+			&item.DrawID,
+			&item.DrawMode,
+			&item.QuestionText,
+			&item.ClientLocalDate,
+			&revealedAt,
+			&item.Deck.ID,
+			&item.Deck.Code,
+			&item.Deck.Name,
+			&item.Card.ID,
+			&item.Card.Code,
+			&item.Card.Title,
+			&item.Card.ShortMessage,
+		); err != nil {
+			return nil, err
+		}
+
+		item.RevealedAt = revealedAt.UTC().Format(time.RFC3339)
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return items, nil
+}
+
 func (r *Repository) RevealRandomCard(ctx context.Context, req RevealDrawRequest) (RevealDrawResponse, error) {
 	query := `
 		WITH selected_card AS (
@@ -48,22 +143,24 @@ func (r *Repository) RevealRandomCard(ctx context.Context, req RevealDrawRequest
 				c.code,
 				c.energy_type,
 				COALESCE(c.illustration_key, '') AS illustration_key,
-				ct.title,
-				ct.short_message,
-				COALESCE(ct.meaning, '') AS meaning,
-				COALESCE(ct.reflection_prompt, '') AS reflection_prompt,
-				COALESCE(ct.share_text, '') AS share_text,
+				COALESCE(ct.title, ct_en.title) AS title,
+				COALESCE(ct.short_message, ct_en.short_message, '') AS short_message,
+				COALESCE(ct.meaning, ct_en.meaning, '') AS meaning,
+				COALESCE(ct.reflection_prompt, ct_en.reflection_prompt, '') AS reflection_prompt,
+				COALESCE(ct.share_text, ct_en.share_text, '') AS share_text,
 				d.id AS deck_id,
 				d.code AS deck_code,
-				dt.name AS deck_name
+				COALESCE(dt.name, dt_en.name) AS deck_name
 			FROM cards c
-			JOIN card_translations ct ON ct.card_id = c.id
+			LEFT JOIN card_translations ct ON ct.card_id = c.id AND ct.locale = $2
+			LEFT JOIN card_translations ct_en ON ct_en.card_id = c.id AND ct_en.locale = 'en'
 			JOIN decks d ON d.id = c.deck_id
-			JOIN deck_translations dt ON dt.deck_id = d.id
+			LEFT JOIN deck_translations dt ON dt.deck_id = d.id AND dt.locale = $2
+			LEFT JOIN deck_translations dt_en ON dt_en.deck_id = d.id AND dt_en.locale = 'en'
 			WHERE c.deck_id = $1
 			  AND c.is_active = true
-			  AND ct.locale = $2
-			  AND dt.locale = $2
+			  AND (ct.id IS NOT NULL OR ct_en.id IS NOT NULL)
+			  AND (dt.id IS NOT NULL OR dt_en.id IS NOT NULL)
 			  AND (
 				($3 = 'daily' AND c.allow_daily_draw = true)
 				OR ($3 = 'guidance' AND c.allow_guidance_draw = true)

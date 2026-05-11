@@ -22,6 +22,8 @@ type DeckHandler interface {
 
 type DrawHandler interface {
 	Reveal(c *gin.Context)
+	GetHistory(c *gin.Context)
+	GetTodayStatus(c *gin.Context)
 }
 
 func New(cfg config.Config, db *pgxpool.Pool, handlers APIHandlers) *gin.Engine {
@@ -62,6 +64,8 @@ func New(cfg config.Config, db *pgxpool.Pool, handlers APIHandlers) *gin.Engine 
 	}
 
 	if handlers.Draws != nil {
+		api.GET("/draws", handlers.Draws.GetHistory)
+		api.GET("/draws/today-status", handlers.Draws.GetTodayStatus)
 		api.POST("/draws/reveal", handlers.Draws.Reveal)
 	}
 
