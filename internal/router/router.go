@@ -10,6 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/yourname/cosmic-card-api/internal/config"
 	"github.com/yourname/cosmic-card-api/internal/modules/decks"
+	"github.com/yourname/cosmic-card-api/internal/modules/draws"
 )
 
 func New(cfg config.Config, db *pgxpool.Pool) *gin.Engine {
@@ -51,6 +52,12 @@ func New(cfg config.Config, db *pgxpool.Pool) *gin.Engine {
 	{
 		api.GET("/decks", deckHandler.GetDecks)
 	}
+
+	drawRepo := draws.NewRepository(db)
+	drawService := draws.NewService(drawRepo)
+	drawHandler := draws.NewHandler(drawService)
+
+	api.POST("/draws/reveal", drawHandler.Reveal)
 
 	return r
 }
