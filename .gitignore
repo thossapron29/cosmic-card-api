@@ -27,6 +27,7 @@ go.work.sum
 # env file
 tmp/
 bin/
+.gocache/
 .env
 
 # Editor/IDE

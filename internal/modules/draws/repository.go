@@ -72,8 +72,8 @@ func (r *Repository) FindDrawHistory(ctx context.Context, userID, locale string,
 			COALESCE(dt.name, dt_en.name) AS deck_name,
 			c.id AS card_id,
 			c.code AS card_code,
-			COALESCE(ct.title, ct_en.title) AS card_title,
-			COALESCE(ct.short_message, ct_en.short_message, '') AS short_message
+			COALESCE(ct.title, ct_en.title, tt.name, tt_en.name, c.code) AS card_title,
+			COALESCE(ct.short_message, ct_en.short_message, tt.description, tt_en.description, '') AS short_message
 		FROM user_draws ud
 		JOIN decks d ON d.id = ud.deck_id
 		JOIN cards c ON c.id = ud.card_id
@@ -89,6 +89,12 @@ func (r *Repository) FindDrawHistory(ctx context.Context, userID, locale string,
 		LEFT JOIN card_translations ct_en
 			ON ct_en.card_id = c.id
 		   AND ct_en.locale = 'en'
+		LEFT JOIN theme_translations tt
+			ON tt.theme_id = c.theme_id
+		   AND tt.locale = $2
+		LEFT JOIN theme_translations tt_en
+			ON tt_en.theme_id = c.theme_id
+		   AND tt_en.locale = 'en'
 		WHERE ud.user_id = $1
 		  AND ($4 = 0 OR ud.id < $4)
 		ORDER BY ud.id DESC
@@ -143,23 +149,25 @@ func (r *Repository) RevealRandomCard(ctx context.Context, req RevealDrawRequest
 				c.code,
 				c.energy_type,
 				COALESCE(c.illustration_key, '') AS illustration_key,
-				COALESCE(ct.title, ct_en.title) AS title,
-				COALESCE(ct.short_message, ct_en.short_message, '') AS short_message,
-				COALESCE(ct.meaning, ct_en.meaning, '') AS meaning,
-				COALESCE(ct.reflection_prompt, ct_en.reflection_prompt, '') AS reflection_prompt,
-				COALESCE(ct.share_text, ct_en.share_text, '') AS share_text,
+				COALESCE(ct.title, ct_en.title, tt.name, tt_en.name, c.code) AS title,
+				COALESCE(ct.short_message, ct_en.short_message, tt.description, tt_en.description, '') AS short_message,
+				COALESCE(ct.meaning, ct_en.meaning, tt.description, tt_en.description, '') AS meaning,
+				COALESCE(ct.reflection_prompt, ct_en.reflection_prompt, 'What part of this message wants your attention today?') AS reflection_prompt,
+				COALESCE(ct.share_text, ct_en.share_text, 'Today I drew ' || COALESCE(ct.title, ct_en.title, tt.name, tt_en.name, c.code) || '.') AS share_text,
 				d.id AS deck_id,
 				d.code AS deck_code,
 				COALESCE(dt.name, dt_en.name) AS deck_name
 			FROM cards c
 			LEFT JOIN card_translations ct ON ct.card_id = c.id AND ct.locale = $2
 			LEFT JOIN card_translations ct_en ON ct_en.card_id = c.id AND ct_en.locale = 'en'
+			LEFT JOIN theme_translations tt ON tt.theme_id = c.theme_id AND tt.locale = $2
+			LEFT JOIN theme_translations tt_en ON tt_en.theme_id = c.theme_id AND tt_en.locale = 'en'
 			JOIN decks d ON d.id = c.deck_id
 			LEFT JOIN deck_translations dt ON dt.deck_id = d.id AND dt.locale = $2
 			LEFT JOIN deck_translations dt_en ON dt_en.deck_id = d.id AND dt_en.locale = 'en'
 			WHERE c.deck_id = $1
 			  AND c.is_active = true
-			  AND (ct.id IS NOT NULL OR ct_en.id IS NOT NULL)
+			  AND (ct.id IS NOT NULL OR ct_en.id IS NOT NULL OR tt.id IS NOT NULL OR tt_en.id IS NOT NULL)
 			  AND (dt.id IS NOT NULL OR dt_en.id IS NOT NULL)
 			  AND (
 				($3 = 'daily' AND c.allow_daily_draw = true)
